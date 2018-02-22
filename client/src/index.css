@@ -3,3 +3,27 @@ body {
   padding: 0;
   font-family: sans-serif;
 }
+
+.video-buttons-group {
+  margin-top: -5px !important;
+}
+
+.ui.black.button {
+  min-width: 140px !important;
+}
+
+.flex-center {
+  align-items: center !important;
+  justify-content: center !important;
+}
+
+.video-player {
+  padding-right: 0 !important;
+}
+
+.control-button {
+  width: 60% !important;
+  border-radius: 20px !important;
+  margin-top: 15px !important;
+  font-size: 16px !important;
+}
