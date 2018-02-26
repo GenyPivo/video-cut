@@ -2,7 +2,7 @@ module Api
   module V1
     class VideoRecordsController < ApplicationController
       def index
-        render json: VideoRecord.all
+        render json: VideoRecord.order(id: :desc)
       end
 
       def create

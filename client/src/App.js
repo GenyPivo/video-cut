@@ -1,6 +1,6 @@
 import React, { Component } from 'react';
 import './App.css';
-import { Grid, Input, Button } from 'semantic-ui-react';
+import { Grid, Input, Button, Dimmer, Loader } from 'semantic-ui-react';
 import { Player } from 'video-react';
 import "../node_modules/video-react/dist/video-react.css";
 
@@ -21,8 +21,12 @@ class App extends Component {
       timer: 0,
       recording: false,
       stopped: false,
-      currentRecording: {},
-      time: Date.now()
+      start_time: 0,
+      finish_time: 0,
+      title: '',
+      records: [],
+      loading: true,
+      playing_stop_at: false
     };
 
     this.play = this.play.bind(this);
@@ -34,6 +38,11 @@ class App extends Component {
   componentDidMount() {
     this.refs.player.subscribeToStateChange(this.handleStateChange.bind(this));
     document.addEventListener("keydown", this.handleKeyDown.bind(this));
+    fetch(`/api/v1/video_records`, {
+      method: 'get'
+    }).then(this.handleResponse).then(x => {
+      this.setState({ records: x, loading: false})
+    });
   }
 
   play() {
@@ -48,15 +57,16 @@ class App extends Component {
     this.refs.player.load();
   }
 
-  changeCurrentTime(seconds) {
-    return () => {
-      const { player } = this.refs.player.getState();
-      const currentTime = player.currentTime;
-      this.refs.player.seek(currentTime + seconds);
-    };
+  changeCurrentTime(time) {
+    this.refs.player.seek(time);
+    this.play();
   }
 
   handleStateChange(state, prevState) {
+    if (this.state.playing_stop_at && state.currentTime > this.state.playing_stop_at) {
+      this.pause();
+      this.setState({playing_stop_at: false});
+    }
     this.setState({
       player: state
     });
@@ -75,45 +85,95 @@ class App extends Component {
   }
 
   handleKeyDown(e) {
-    console.log(e.key);
-    switch(e.key) {
-      case '1':
-        this.changeSourceState(0);
-        break;
-      case '2':
-        console.log(23);
-        this.changeSourceState(1);
-        break;
-      case '3':
-        this.changeSourceState(2);
-        break;
+    if (!this.state.recording) {
+      switch(e.key) {
+        case '1':
+          this.changeSourceState(0);
+          break;
+        case '2':
+          this.changeSourceState(1);
+          break;
+        case '3':
+          this.changeSourceState(2);
+          break;
+      }
     }
   }
 
   handleRecordStart() {
-    this.setState({recording: true});
-    this.setState({currentRecording: { start_time: this.state.player.currentTime }});
+    const title = `Video_${this.state.current_video_index + 1}_${Date.now()}`;
+    this.setState({recording: true, start_time: this.state.player.currentTime, title: title});
+    this.play();
   }
 
   handleRecordStop() {
-    this.setState({recording: false, stopped: true, currentRecording: { stop_time: this.state.player.currentTime }});
+    this.setState({ recording: false, stopped: true, finish_time: this.state.player.currentTime });
     this.pause();
   }
 
   handleSaveVideo() {
+    const { start_time, finish_time, title } = this.state;
+    const ci = this.state.current_video_index;
+    const data = {
+      start_time: start_time,
+      finish_time: finish_time,
+      title: title,
+      video_type: ci
+    };
 
+    fetch(`/api/v1/video_records`, {
+      method: 'post',
+      body: JSON.stringify(data),
+      headers: {
+        "Content-Type": "application/json"
+      }
+    }).then(this.handleResponse).then(x => this.addRecord(x));
+  }
+
+  addRecord(record) {
+    this.setState({ records: [record, ...this.state.records ], stopped: false })
+  }
+
+  handleResponse(response) {
+    if (response.ok) {
+      return response.json();
+    } else {
+      let error = new Error(response.statusText);
+      error.response = response;
+      throw error;
+    }
+  }
+
+  handleTitleChange(e) {
+    this.setState({ title: e.target.value });
+  }
+
+  handlePlaySaved(record) {
+    return () => {
+      if (record.video_type !== this.state.current_video_index ) {
+        this.changeSourceState(record.video_type);
+      }
+      this.setState({playing_stop_at: record.finish_time});
+      this.changeCurrentTime(record.start_time);
+    }
+  }
+
+  handleDismiss() {
+    this.setState({stopped: false});
   }
 
 
   render() {
-    const { current_video_index, time } = this.state;
     return (
       <div className="App">
+        <Dimmer active={this.state.loading}>
+          <Loader />
+        </Dimmer>
         <header className="App-header">
         </header>
         <Grid>
           <Grid.Column width={10} className='video-player'>
-            <Player ref="player" autoPlay muted aspectRatio="16:9">
+            <Player ref="player" autoPlay={!this.state.loading} muted aspectRatio="16:9">
               <source src={this.state.source}/>
             </Player>
             <Grid className="video-buttons-group">
@@ -147,18 +207,35 @@ class App extends Component {
                   </Button>
                 }
               </Grid.Row>
-              {this.state.stopped ?
+              {this.state.stopped &&
                 <Grid.Row>
                   <Grid.Column width={8}>
-                    <Input value={`Video_${current_video_index + 1}_${time}`} />
+                    <Input value={this.state.title} onChange={this.handleTitleChange.bind(this)} />
                   </Grid.Column>
                   <Grid.Column width={8}>
-                    <Button color='yellow' onClick={this.handleSaveVideo.bind(this)}>
+                    <Button color='blue' onClick={this.handleSaveVideo.bind(this)}>
                       Save
                     </Button>
+                    <Button color='yellow' onClick={this.handleDismiss.bind(this)}>
+                      Dismiss
+                    </Button>
                   </Grid.Column>
-                </Grid.Row> :
-              ''}
+                </Grid.Row> }
+              {this.state.records.map((rec) => {
+                return (
+                  <Grid.Row key={rec.id}>
+                    <Grid.Column width={8}>
+                      {rec.title}<br/>
+                      Time: {Math.round(rec.start_time * 100) / 100}s - {Math.round(rec.finish_time * 100) / 100}s
+                    </Grid.Column>
+                    <Grid.Column width={8}>
+                      <Button color='grey' onClick={this.handlePlaySaved(rec)}>
+                        Play
+                      </Button>
+                    </Grid.Column>
+                  </Grid.Row>
+                );
+              })}
             </Grid>
           </Grid.Column>
         </Grid>

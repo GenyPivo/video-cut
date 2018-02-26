@@ -14,8 +14,8 @@ ActiveRecord::Schema.define(version: 20180226055539) do
 
   create_table "video_records", force: :cascade do |t|
     t.string "title"
-    t.datetime "start_time"
-    t.datetime "finish_time"
+    t.float "start_time"
+    t.float "finish_time"
     t.integer "video_type"
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
