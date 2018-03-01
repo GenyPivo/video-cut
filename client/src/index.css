@@ -27,3 +27,15 @@ body {
   margin-top: 15px !important;
   font-size: 16px !important;
 }
+
+.distribution {
+  text-align: left;
+}
+
+.react-confirm-alert-button-group {
+  justify-content: space-between !important;
+}
+
+.react-confirm-alert {
+  text-align: center !important;
+}
